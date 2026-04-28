@@ -1,9 +1,9 @@
-"""Claude AI-based article structure detection."""
+"""OpenAI-based article structure detection."""
 
 import json
 import os
 
-import anthropic
+from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -48,37 +48,26 @@ Rules:
 
 def parse_article(raw_text: str) -> dict:
     """
-    Send extracted PDF text to Claude and return a structured article dict.
+    Send extracted PDF text to OpenAI and return a structured article dict.
 
-    Raises ValueError if Claude returns invalid JSON.
+    Raises ValueError if the model returns invalid JSON.
     """
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=4096,
-        system=[
-            {
-                "type": "text",
-                "text": _SYSTEM_PROMPT,
-                "cache_control": {"type": "ephemeral"},
-            }
-        ],
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        response_format={"type": "json_object"},
         messages=[
-            {
-                "role": "user",
-                "content": f"Parse the following magazine article text:\n\n{raw_text}",
-            }
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": f"Parse the following magazine article text:\n\n{raw_text}"},
         ],
+        max_tokens=4096,
+        temperature=0,
     )
 
-    raw_json = message.content[0].text.strip()
-
-    if raw_json.startswith("```"):
-        raw_json = raw_json.split("\n", 1)[1]
-        raw_json = raw_json.rsplit("```", 1)[0]
+    raw_json = response.choices[0].message.content.strip()
 
     try:
         return json.loads(raw_json)
     except json.JSONDecodeError as exc:
-        raise ValueError(f"Claude returned invalid JSON: {exc}\n\nRaw response:\n{raw_json}") from exc
+        raise ValueError(f"OpenAI returned invalid JSON: {exc}\n\nRaw response:\n{raw_json}") from exc
